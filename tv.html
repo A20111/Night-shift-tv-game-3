@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Night Shift</title>
+<style>
+:root{--bg:#0b0d12;--panel:#171b25;--line:#2b3244;--text:#eef1f7;--mute:#98a2b8;--acc:#ffc83d;--bad:#ff5468;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#eef0f5;--panel:#fff;--line:#cfd5e3;--text:#151a26;--mute:#5a6479;--acc:#9a6a00;--bad:#c4263a;color-scheme:light}}
+:root[data-theme="light"]{--bg:#eef0f5;--panel:#fff;--line:#cfd5e3;--text:#151a26;--mute:#5a6479;--acc:#9a6a00;--bad:#c4263a;color-scheme:light}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--text);font:500 17px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+.scr{max-width:560px;margin:0 auto;padding:24px 18px}
+h1{font-size:2.6rem;line-height:1.05;margin:20px 0 12px;letter-spacing:-.02em}
+p{margin:0 0 14px}.mute{color:var(--mute)}
+button{font:inherit;font-weight:700;color:var(--text);background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:14px 16px;min-height:52px;width:100%;margin:0 0 10px;cursor:pointer}
+button.pri{background:var(--acc);color:#111;border-color:var(--acc)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+input{font:inherit;font-size:2rem;text-align:center;letter-spacing:.3em;width:100%;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:var(--text);margin-bottom:12px}
+#tv{max-width:none;padding:0;position:fixed;inset:0;background:#000}
+#cv{display:block;width:100%;height:100%}
+#hud{position:absolute;inset:0;pointer-events:none;color:#eef1f7;text-shadow:0 1px 4px #000}
+#h1{position:absolute;left:3vw;top:3vh;font-size:clamp(14px,2.2vw,28px);font-weight:700}
+#h2{position:absolute;left:0;right:0;bottom:4vh;text-align:center;font-size:clamp(14px,2vw,26px);padding:0 4vw}
+#h2 b{font-size:clamp(20px,3.8vw,56px);display:block;letter-spacing:.04em;color:#ffc83d;margin:6px 0}
+#area{height:46vh;border-radius:16px;border:2px dashed var(--line);display:grid;place-items:center;touch-action:none;color:var(--mute);text-align:center;padding:12px;margin-bottom:12px;user-select:none;-webkit-user-select:none}
+#msg{background:var(--panel);border:2px solid var(--acc);border-radius:14px;padding:14px;margin-bottom:12px;font-weight:700}
+</style>
+</head>
+<body>
+<div id="tv" class="scr"><canvas id="cv"></canvas><div id="hud"><div id="h1"></div><div id="h2"></div></div></div>
+<script>
+const $=s=>document.querySelector(s),cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+function runDisplay(){
+ const cv=$('#cv'),ctx=cv.getContext('2d'),dk=document.createElement('canvas'),dx=dk.getContext('2d');
+ let W,H,pad=null,addr='';
+ const size=()=>{W=cv.width=dk.width=innerWidth;H=cv.height=dk.height=innerHeight};size();addEventListener('resize',size);
+ const mouse={x:.5,y:.5};
+ const G={aim:{x:.5,y:.5},fuses:[],L:{x:.5,y:.05},S:{x:.5,y:.05},got:0,caught:0,t0:performance.now(),state:'play',ev:0,lastG:null,flash:0,end:0,time:0,lit:false,pad:false};
+ const props=[[.08,.2,.16,.1],[.7,.15,.2,.1],[.1,.55,.12,.18],[.76,.5,.14,.2],[.4,.4,.2,.08],[.42,.75,.16,.1]];
+ function spawn(){G.S={x:.1+Math.random()*.8,y:.04};G.L={x:G.S.x,y:G.S.y}}
+ function reset(){G.fuses=[0,1,2].map(()=>({x:.1+Math.random()*.8,y:.14+Math.random()*.55,t:0}));spawn();G.got=0;G.caught=0;G.t0=performance.now();G.state='play';G.ev=0}
+ reset();
+ fetch('/info').then(r=>r.json()).then(j=>{addr=j.url}).catch(()=>{});
+ (async function sync(){try{const j=await(await fetch('/sync?ev='+G.ev+'&got='+G.got+'&state='+G.state,{cache:'no-store'})).json();pad=j.age<1500?j:null}catch(e){pad=null}setTimeout(sync,50)})();
+ function grab(){
+  if(G.state==='win'){if(performance.now()-G.end>1500)reset();return}
+  const R=Math.min(W,H)*.07;
+  for(const f of G.fuses)if(!f.t&&Math.hypot((f.x-G.aim.x)*W,(f.y-G.aim.y)*H)<R){f.t=1;G.got++;G.ev++;if(G.got===3){G.state='win';G.end=performance.now();G.time=(G.end-G.t0)/1000+5*G.caught}}
+ }
+ cv.addEventListener('pointermove',e=>{mouse.x=e.clientX/W;mouse.y=e.clientY/H});
+ cv.addEventListener('pointerdown',e=>{mouse.x=e.clientX/W;mouse.y=e.clientY/H;grab()});
+ addEventListener('keydown',e=>{const s=.05,k=e.key;if(k==='ArrowLeft')mouse.x=cl(mouse.x-s);else if(k==='ArrowRight')mouse.x=cl(mouse.x+s);else if(k==='ArrowUp')mouse.y=cl(mouse.y-s);else if(k==='ArrowDown')mouse.y=cl(mouse.y+s);else if(e.code==='Space'||k==='Enter'){e.preventDefault();grab()}});
+ const eyes=()=>{const r=H*.06,L=G.L;ctx.fillStyle='#ff5468';ctx.beginPath();ctx.arc(L.x*W-r*.3,L.y*H-r*.2,r*.13,0,7);ctx.arc(L.x*W+r*.3,L.y*H-r*.2,r*.13,0,7);ctx.fill()};
+ function draw(R){
+  ctx.fillStyle='#46506a';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#68759a';for(const p of props)ctx.fillRect(p[0]*W,p[1]*H,p[2]*W,p[3]*H);
+  for(const f of G.fuses)if(!f.t){ctx.fillStyle='#ffc83d';ctx.fillRect(f.x*W-9,f.y*H-14,18,28);ctx.fillStyle='#46506a';ctx.fillRect(f.x*W-4,f.y*H-5,8,10)}
+  const L=G.L,r=H*.06;ctx.fillStyle='#07070b';ctx.beginPath();ctx.ellipse(L.x*W,L.y*H,r*.9,r*1.15,0,0,7);ctx.fill();eyes();
+  dx.globalCompositeOperation='source-over';dx.fillStyle='rgba(0,0,0,.97)';dx.fillRect(0,0,W,H);
+  dx.globalCompositeOperation='destination-out';
+  const ax=G.aim.x*W,ay=G.aim.y*H,g=dx.createRadialGradient(ax,ay,R*.1,ax,ay,R);
+  g.addColorStop(0,'rgba(0,0,0,1)');g.addColorStop(.75,'rgba(0,0,0,.85)');g.addColorStop(1,'rgba(0,0,0,0)');
+  dx.fillStyle=g;dx.beginPath();dx.arc(ax,ay,R,0,7);dx.fill();
+  ctx.drawImage(dk,0,0);
+  if(!G.lit&&G.state==='play')eyes();
+  ctx.fillStyle='rgba(238,241,247,.55)';ctx.beginPath();ctx.arc(W*.5,H*.92,H*.012,0,7);ctx.fill();
+  if(G.flash>0){ctx.fillStyle='rgba(255,84,104,'+G.flash*.5+')';ctx.fillRect(0,0,W,H)}
+ }
+ function hud(){
+  const t=G.state==='win'?G.time:(performance.now()-G.t0)/1000+5*G.caught;
+  $('#h1').textContent='Fuses '+G.got+'/3  ·  '+t.toFixed(1)+' s  ·  Caught '+G.caught;
+  let h='';
+  if(G.state==='win')h='<b>Power restored</b>'+G.time.toFixed(1)+' s. Press Grab or Space to play again.';
+  else if(!G.pad)h=addr?'NIGHT SHIFT<br>On your phone, open this address on the same Wi-Fi:<b>'+addr+'</b>Use the phone to aim and tap GRAB. TV remote: arrows to aim, OK to grab.':'Starting…';
+  if($('#h2').dataset.k!==h){$('#h2').dataset.k=h;$('#h2').innerHTML=h}
+ }
+ let last=performance.now();
+ function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  G.pad=!!pad;
+  if(pad){const q=pad;G.aim.x+=(cl(+q.x||0)-G.aim.x)*.35;G.aim.y+=(cl(+q.y||0)-G.aim.y)*.35;if(G.lastG===null)G.lastG=q.g;else if(q.g!==G.lastG){G.lastG=q.g;grab()}}
+  else{G.aim.x+=(mouse.x-G.aim.x)*.5;G.aim.y+=(mouse.y-G.aim.y)*.5}
+  const R=Math.min(W,H)*.2;
+  if(G.state==='play'){
+   const L=G.L,P={x:.5,y:.92};
+   G.lit=Math.hypot((L.x-G.aim.x)*W,(L.y-G.aim.y)*H)<R*.9;
+   const tg=G.lit?G.S:P,sp=G.lit?.12:.05+.012*G.got;
+   const ddx=tg.x-L.x,ddy=tg.y-L.y,d=Math.hypot(ddx*W,ddy*H)||1,k=Math.min(1,sp*W*dt/d);
+   L.x+=ddx*k;L.y+=ddy*k;
+   if(Math.hypot((L.x-P.x)*W,(L.y-P.y)*H)<H*.05){G.caught++;G.flash=1;spawn()}
+  }
+  G.flash=Math.max(0,G.flash-dt*2);
+  draw(R);hud();requestAnimationFrame(frame);
+ }
+ requestAnimationFrame(frame);
+}
+
+runDisplay();
+</script>
+</body>
+</html>
